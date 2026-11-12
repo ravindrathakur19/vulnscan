@@ -1,0 +1,77 @@
+# NOTE ON REPLICA COUNT (read before changing this):
+# app.py/scan_store.py persist *finished* scan metadata and reports to the
+# PVC below, so they survive a pod restart. But a scan that is CURRENTLY
+# RUNNING keeps its live log buffer and worker thread in that one pod's
+# memory, and Socket.IO broadcasts only to clients connected to that same
+# pod. With replicas > 1 and no sticky sessions / shared pub-sub (e.g. Redis),
+# a client could be routed to a different pod mid-scan and simply stop
+# receiving "log"/"finding" events. Until that shared-state layer is built,
+# this deployment intentionally runs a SINGLE replica. Do not bump replicas
+# here without also adding session affinity + a shared event bus.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scanner-deployment
+  namespace: vulnscan
+  labels:
+    app: vuln-scanner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vuln-scanner
+  template:
+    metadata:
+      labels:
+        app: vuln-scanner
+    spec:
+      serviceAccountName: vulnscan-sa
+      containers:
+        - name: vuln-scanner
+          image: ravi12t/vuln-scanner:latest   # Jenkins overwrites this with the commit-SHA tag on deploy
+          ports:
+            - containerPort: 5000
+              name: http
+            - containerPort: 9200
+              name: metrics
+          envFrom:
+            - secretRef:
+                name: vulnscan-secrets
+          env:
+            - name: PORT
+              value: "5000"
+            - name: DATA_DIR
+              value: "/app/reports"
+            - name: FLASK_ENV
+              value: "production"
+            - name: MAX_CONCURRENT_SCANS
+              value: "5"
+            - name: METRICS_PORT
+              value: "9200"   # scraped in-cluster only (see monitoring/prometheus.yml) - never exposed publicly
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: vulnscan-reports-pvc

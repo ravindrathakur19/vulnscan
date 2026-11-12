@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scanner-service
+  namespace: vulnscan
+spec:
+  selector:
+    app: vuln-scanner
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+    - name: metrics
+      port: 9200
+      targetPort: 9200
+  type: NodePort
+  # NOTE: NodePort exposes :9200 on every node's host IP too. If the node's
+  # security group allows inbound beyond 22/80/443 (it shouldn't per
+  # terraform/main.tf), switch this Service to ClusterIP and have Prometheus
+  # scrape it from inside the cluster instead.

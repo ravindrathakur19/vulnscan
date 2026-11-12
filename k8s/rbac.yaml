@@ -1,0 +1,37 @@
+# Least-privilege RBAC: the app's own ServiceAccount can only read pods/logs
+# in its own namespace (useful for a future self-status page) - it cannot
+# create/delete anything, and has no access outside the vulnscan namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vulnscan
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vulnscan-sa
+  namespace: vulnscan
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vulnscan-read-only
+  namespace: vulnscan
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vulnscan-read-only-binding
+  namespace: vulnscan
+subjects:
+  - kind: ServiceAccount
+    name: vulnscan-sa
+    namespace: vulnscan
+roleRef:
+  kind: Role
+  name: vulnscan-read-only
+  apiGroup: rbac.authorization.k8s.io

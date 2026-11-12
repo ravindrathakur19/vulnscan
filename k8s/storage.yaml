@@ -1,0 +1,16 @@
+# Report storage must survive pod restarts (a pod crash should not delete
+# every scan's reports). On a single-node K3s cluster the default "local-path"
+# StorageClass is sufficient; ReadWriteOnce is enough as long as the scanner
+# runs as a single replica (see README "Scaling limitations").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vulnscan-reports-pvc
+  namespace: vulnscan
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi

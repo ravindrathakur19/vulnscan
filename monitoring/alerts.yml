@@ -1,0 +1,49 @@
+groups:
+  - name: vulnscan-infrastructure
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage has been above 80% for 5 minutes ({{ $value | printf \"%.1f\" }}%)."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage has been above 85% for 5 minutes ({{ $value | printf \"%.1f\" }}%)."
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Root filesystem has less than 15% free space."
+
+  - name: vulnscan-application
+    rules:
+      - alert: ScanFailureRateHigh
+        expr: rate(vulnscan_scans_failed_total[15m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated VulnScan scan failure rate"
+          description: "More than 20% of recent scans are failing - check application logs."
+
+      - alert: ReportStorageNotWritable
+        expr: up{job="vulnscan-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VulnScan app metrics endpoint unreachable"
+          description: "Prometheus cannot scrape the app - it may be down or the PVC may be full."

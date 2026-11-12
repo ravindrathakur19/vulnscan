@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VulnScan Pro — Web Vulnerability Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #080b12;
+  --surface: #0d1120;
+  --surface2: #111828;
+  --border: #1a2540;
+  --accent: #00f5d4;
+  --accent2: #00c8ff;
+  --red: #ff2d55;
+  --orange: #ff6b35;
+  --yellow: #ffc200;
+  --green: #2ed573;
+  --text: #c9d1e0;
+  --muted: #4a5a78;
+  --dim: #2d3d5e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,245,212,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,212,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+/* ── Header ─────────────────────────────────── */
+header {
+  padding: 32px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+}
+.header-inner { display: flex; align-items: center; justify-content: space-between; }
+.logo-area { display: flex; align-items: center; gap: 16px; }
+.logo-icon {
+  width: 44px; height: 44px;
+  background: rgba(0,245,212,.1);
+  border: 1px solid rgba(0,245,212,.3);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.logo-text h1 { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.logo-text p { font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.version-badge {
+  background: rgba(0,245,212,.08);
+  border: 1px solid rgba(0,245,212,.2);
+  color: var(--accent);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 4px 12px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+/* ── Scan Form ──────────────────────────────── */
+.scan-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+.scan-card h2 { font-size: 16px; font-weight: 600; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; }
+
+.url-row { display: flex; gap: 12px; margin-bottom: 16px; }
+.url-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .2s;
+}
+.url-input:focus { border-color: var(--accent); }
+.url-input::placeholder { color: var(--dim); }
+
+.scan-btn {
+  background: var(--accent);
+  color: #080b12;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .2s, transform .1s;
+  white-space: nowrap;
+  letter-spacing: .5px;
+}
+.scan-btn:hover { opacity: .88; }
+.scan-btn:active { transform: scale(.98); }
+.scan-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.options-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.opt-toggle {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+  user-select: none;
+}
+.opt-toggle.active {
+  background: rgba(0,245,212,.08);
+  border-color: rgba(0,245,212,.3);
+  color: var(--accent);
+}
+
+/* ── Stats Bar ──────────────────────────────── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  transition: border-color .3s;
+}
+.stat.has-value { border-color: rgba(255,255,255,.1); }
+.stat-num { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.stat-label { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+.s-total  .stat-num { color: #fff; }
+.s-crit   .stat-num { color: var(--red); }
+.s-high   .stat-num { color: var(--orange); }
+.s-med    .stat-num { color: var(--yellow); }
+.s-low    .stat-num { color: var(--accent2); }
+
+/* ── Terminal ───────────────────────────────── */
+.terminal-card {
+  background: #05080f;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.terminal-topbar {
+  background: var(--surface);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tb-dots { display: flex; gap: 6px; }
+.tb-dot { width: 11px; height: 11px; border-radius: 50%; }
+.d1{background:#ff5f57;}.d2{background:#febc2e;}.d3{background:#28c840;}
+.tb-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-left: 4px; }
+.tb-status {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(46,213,115,.1);
+  color: var(--green);
+  border: 1px solid rgba(46,213,115,.2);
+}
+.tb-status.scanning {
+  background: rgba(0,245,212,.1);
+  color: var(--accent);
+  border-color: rgba(0,245,212,.2);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.tb-status.error { background: rgba(255,45,85,.1); color: var(--red); border-color: rgba(255,45,85,.2); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+#terminal {
+  padding: 16px 20px;
+  height: 320px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  scroll-behavior: smooth;
+}
+#terminal::-webkit-scrollbar { width: 4px; }
+#terminal::-webkit-scrollbar-track { background: transparent; }
+#terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.t-line { display: flex; gap: 10px; margin-bottom: 1px; }
+.t-ts { color: var(--dim); min-width: 64px; }
+.t-info  .t-icon { color: var(--accent2); }
+.t-ok    .t-icon { color: var(--green); }
+.t-warn  .t-icon { color: var(--yellow); }
+.t-vuln  .t-icon { color: var(--red); }
+.t-msg   { color: var(--text); flex: 1; word-break: break-all; }
+.t-vuln  .t-msg  { color: #fff; }
+.blink { animation: blink 1s step-end infinite; color: var(--accent); }
+@keyframes blink { 50%{opacity:0} }
+
+/* ── Findings Table ─────────────────────────── */
+.findings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  display: none;
+}
+.findings-card.visible { display: block; }
+.findings-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.findings-title { font-size: 14px; font-weight: 600; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+.dl-btns { display: flex; gap: 8px; }
+.dl-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all .2s;
+}
+.dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dl-btn.primary { background: var(--accent); color: #080b12; border-color: var(--accent); }
+.dl-btn.primary:hover { opacity: .85; color: #080b12; }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  background: rgba(0,245,212,.04);
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 13px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  font-size: 13px;
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.02); }
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .5px;
+  color: #fff;
+}
+.b-CRITICAL { background: var(--red); }
+.b-HIGH     { background: var(--orange); }
+.b-MEDIUM   { background: var(--yellow); color: #080b12; }
+.b-LOW      { background: var(--accent2); color: #080b12; }
+.b-INFO     { background: var(--muted); }
+
+.td-url { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); word-break: break-all; }
+.td-ev  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--yellow); }
+
+/* ── Footer ─────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 24px 0 32px;
+  color: var(--dim);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-icon">&#9670;</div>
+        <div class="logo-text">
+          <h1>VULNSCAN PRO</h1>
+          <p>// advanced web vulnerability scanner</p>
+        </div>
+      </div>
+      <span class="version-badge">v3.0</span>
+    </div>
+  </header>
+
+  <!-- Scan Form -->
+  <div class="scan-card">
+    <h2>&#9632; Target Configuration</h2>
+    <div class="url-row">
+      <input class="url-input" id="urlInput" type="text"
+             placeholder="https://target.example.com"
+             autocomplete="off" spellcheck="false">
+      <button class="scan-btn" id="scanBtn" onclick="startScan()">&#9654; SCAN</button>
+    </div>
+    <div class="options-row">
+      <div class="opt-toggle active" id="opt-fullscan" onclick="toggleOpt(this)">Full Scan</div>
+      <div class="opt-toggle active" id="opt-subdomains" onclick="toggleOpt(this)">Subdomain Enum</div>
+      <div class="opt-toggle active" id="opt-blindsqli" onclick="toggleOpt(this)">Blind SQLi</div>
+      <div class="opt-toggle" id="opt-nosubs" onclick="toggleOpt(this)">Skip Subdomains (faster)</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat s-total"><div class="stat-num" id="s-total">-</div><div class="stat-label">TOTAL</div></div>
+    <div class="stat s-crit" ><div class="stat-num" id="s-crit" >0</div><div class="stat-label">CRITICAL</div></div>
+    <div class="stat s-high" ><div class="stat-num" id="s-high" >0</div><div class="stat-label">HIGH</div></div>
+    <div class="stat s-med"  ><div class="stat-num" id="s-med"  >0</div><div class="stat-label">MEDIUM</div></div>
+    <div class="stat s-low"  ><div class="stat-num" id="s-low"  >0</div><div class="stat-label">LOW</div></div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="terminal-card">
+    <div class="terminal-topbar">
+      <div class="tb-dots">
+        <div class="tb-dot d1"></div>
+        <div class="tb-dot d2"></div>
+        <div class="tb-dot d3"></div>
+      </div>
+      <span class="tb-title">scanner@vulnscan:~$</span>
+      <span class="tb-status" id="tbStatus">READY</span>
+    </div>
+    <div id="terminal">
+      <div class="t-line t-info">
+        <span class="t-ts">--:--:--</span>
+        <span class="t-icon">[*]</span>
+        <span class="t-msg">VulnScan Pro v3.0 ready. Enter a target URL and click SCAN.<span class="blink">_</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <div class="findings-card" id="findingsCard">
+    <div class="findings-header">
+      <span class="findings-title">&#9670; Vulnerability Findings</span>
+      <div class="dl-btns">
+        <a class="dl-btn primary" id="dlHtml" href="#" target="_blank">&#8595; HTML Report</a>
+        <a class="dl-btn" id="dlJson" href="#" target="_blank">&#8595; JSON Report</a>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Severity</th>
+          <th>Type</th>
+          <th>URL</th>
+          <th>Details</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody id="findingsBody"></tbody>
+    </table>
+  </div>
+
+  <footer>
+    VulnScan Pro v3.0 &nbsp;|&nbsp; For authorized penetration testing only &nbsp;|&nbsp; Use responsibly
+  </footer>
+</div>
+
+<script>
+const socket = io();
+let currentScanId = null;
+let findingCount = 0;
+let counts = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0};
+
+function toggleOpt(el) { el.classList.toggle('active'); }
+
+function addLine(ts, level, msg) {
+  const term = document.getElementById('terminal');
+  // Remove initial blinking cursor line on first real output
+  const initLine = term.querySelector('.blink');
+  if (initLine) initLine.closest('.t-line').remove();
+
+  const cls = {INFO:'t-info', OK:'t-ok', WARN:'t-warn', VULN:'t-vuln'}[level] || 't-info';
+  const icon = {INFO:'[*]', OK:'[+]', WARN:'[!]', VULN:'[VULN]'}[level] || '[*]';
+  const div = document.createElement('div');
+  div.className = `t-line ${cls}`;
+  div.innerHTML = `<span class="t-ts">${ts}</span><span class="t-icon">${icon}</span><span class="t-msg">${escHtml(msg)}</span>`;
+  term.appendChild(div);
+  term.scrollTop = term.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addFinding(f, idx) {
+  const tbody = document.getElementById('findingsBody');
+  const sev = f.severity;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${idx}</td>
+    <td><span class="badge b-${sev}">${sev}</span></td>
+    <td><strong>${escHtml(f.type)}</strong></td>
+    <td class="td-url">${escHtml(f.url)}</td>
+    <td>${escHtml(f.details || '')}</td>
+    <td class="td-ev">${escHtml(f.evidence || '')}</td>`;
+  tbody.appendChild(tr);
+  document.getElementById('findingsCard').classList.add('visible');
+}
+
+function updateStats() {
+  document.getElementById('s-total').textContent = findingCount;
+  document.getElementById('s-crit').textContent  = counts.CRITICAL;
+  document.getElementById('s-high').textContent  = counts.HIGH;
+  document.getElementById('s-med').textContent   = counts.MEDIUM;
+  document.getElementById('s-low').textContent   = counts.LOW;
+}
+
+async function startScan() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { alert('Please enter a target URL'); return; }
+
+  // Reset UI
+  document.getElementById('terminal').innerHTML = '';
+  document.getElementById('findingsBody').innerHTML = '';
+  document.getElementById('findingsCard').classList.remove('visible');
+  findingCount = 0;
+  counts = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0};
+  updateStats();
+  document.getElementById('s-total').textContent = '-';
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('tbStatus').textContent = 'SCANNING...';
+  document.getElementById('tbStatus').className = 'tb-status scanning';
+
+  addLine(now(), 'INFO', `Target: ${url}`);
+  addLine(now(), 'INFO', 'Initializing scanner...');
+
+  const payload = {
+    url: url,
+    full_scan: document.getElementById('opt-fullscan').classList.contains('active'),
+    threads: 10,
+    timeout: 5
+  };
+
+  try {
+    const res = await fetch('/api/scan', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    currentScanId = data.scan_id;
+    addLine(now(), 'OK', `Scan started (ID: ${data.scan_id})`);
+  } catch(e) {
+    showError('Could not connect to server');
+  }
+}
+
+function showError(msg) {
+  addLine(now(), 'WARN', 'Error: ' + msg);
+  document.getElementById('tbStatus').textContent = 'ERROR';
+  document.getElementById('tbStatus').className = 'tb-status error';
+  document.getElementById('scanBtn').disabled = false;
+}
+
+function now() {
+  return new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ── Socket events ────────────────────────────
+socket.on('log', d => {
+  if (d.scan_id !== currentScanId) return;
+  addLine(d.ts, d.level, d.msg);
+});
+
+socket.on('finding', d => {
+  if (d.scan_id !== currentScanId) return;
+  findingCount++;
+  counts[d.finding.severity] = (counts[d.finding.severity] || 0) + 1;
+  updateStats();
+  addFinding(d.finding, findingCount);
+});
+
+socket.on('scan_complete', d => {
+  if (d.scan_id !== currentScanId) return;
+  addLine(now(), 'OK', `Scan complete! ${d.total} findings — CRITICAL:${d.critical} HIGH:${d.high} MEDIUM:${d.medium} LOW:${d.low}`);
+  document.getElementById('tbStatus').textContent = 'COMPLETE';
+  document.getElementById('tbStatus').className = 'tb-status';
+  document.getElementById('scanBtn').disabled = false;
+  document.getElementById('dlHtml').href = d.html_report;
+  document.getElementById('dlJson').href = d.json_report;
+  updateStats();
+});
+
+socket.on('scan_error', d => {
+  if (d.scan_id !== currentScanId) return;
+  showError(d.error);
+});
+
+// Enter key to scan
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startScan();
+});
+</script>
+</body>
+</html>
